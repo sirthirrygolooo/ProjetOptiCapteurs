@@ -1,8 +1,25 @@
 import sys
+from itertools import combinations
+
+
+def combinaisons_elementaires(n_capteurs: int, n_zones: int, zones_par_capteur: list[list[int]]) -> list[tuple[int]]:
+    cibles = {z for zones in zones_par_capteur for z in zones}    
+    solutions = []
+    for taille in range(1, n_capteurs + 1):
+        for combo in combinations(range(n_capteurs), taille):
+            couvertes = set(z for c in combo for z in zones_par_capteur[c])
+            
+            if couvertes == cibles and not any(set(s).issubset(combo) for s in solutions):
+                solutions.append(combo)
+                
+    return [tuple(c + 1 for c in sol) for sol in solutions]
 
 
 def solveur(n_capteurs: int, n_zones: int, zones_par_capteur: list[list[int]], duree_de_vie_capteurs: list[int]) -> None:
-    return
+    # trouver les combinaisons de capteurs qui couvrent toutes les zones
+    # donc au moins un capteur doit couvrir chaque zone
+    combinaisons = combinaisons_elementaires(n_capteurs, n_zones, zones_par_capteur)
+    print(f"Combinaisons élémentaires: {combinaisons}")
 
 
 def main() -> int:
@@ -33,10 +50,8 @@ def main() -> int:
         for i, zones in enumerate(zones_par_capteur):
             print(f"Capteur {i+1}: {zones}")
         print(f"Durée de vie des capteurs: {duree_de_vie_capteurs}")
-        
-        
-        solveur(n_capteurs, n_zones, zones_par_capteur, duree_de_vie_capteurs)
 
+        solveur(n_capteurs, n_zones, zones_par_capteur, duree_de_vie_capteurs)
     return 0
 
 if __name__ == "__main__":
