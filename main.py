@@ -1,24 +1,64 @@
 import sys
-from itertools import combinations
+import random
 
 
-def combinaisons_elementaires(n_capteurs: int, n_zones: int, zones_par_capteur: list[list[int]]) -> list[tuple[int]]:
-    cibles = {z for zones in zones_par_capteur for z in zones}    
-    solutions = []
-    for taille in range(1, n_capteurs + 1):
-        for combo in combinations(range(n_capteurs), taille):
-            couvertes = set(z for c in combo for z in zones_par_capteur[c])
+def combinaison_elementaire(n_capteurs: int, zones_par_capteur: list[list[int]]) -> tuple[int]:
+    cibles = {z for zones in zones_par_capteur for z in zones}
+    
+    # ==========================================
+    # Algorithme Glouton Aléatoire
+    # ==========================================
+    zones_non_couvertes = set(cibles)
+    config_valide = []
+    capteurs_dispos = list(range(n_capteurs))
+    
+    while zones_non_couvertes:
+        apports = []
+        for c in capteurs_dispos:
+            couverture = set(zones_par_capteur[c]) & zones_non_couvertes
+            apports.append((len(couverture), c))
+        
+        max_couverture = max(apport[0] for apport in apports)
+        
+        if max_couverture == 0:
+            break
             
-            if couvertes == cibles and not any(set(s).issubset(combo) for s in solutions):
-                solutions.append(combo)
-                
-    return [tuple(c + 1 for c in sol) for sol in solutions]
+        meilleurs_candidats = [c for apport, c in apports if apport == max_couverture]
+        
+        choix = random.choice(meilleurs_candidats)
+        
+        config_valide.append(choix)
+        capteurs_dispos.remove(choix)
+        zones_non_couvertes -= set(zones_par_capteur[choix])
+
+    # ==========================================
+    # La Purge
+    # ==========================================
+    config_elementaire = config_valide.copy()
+    
+    for capteur in reversed(config_valide):
+        config_test = [c for c in config_elementaire if c != capteur]
+        zones_couvertes_test = {z for c in config_test for z in zones_par_capteur[c]}
+        
+        if cibles.issubset(zones_couvertes_test):
+            config_elementaire.remove(capteur)
+            
+    return tuple(sorted([c + 1 for c in config_elementaire]))
+
+
+def creer_liste_combinaisons(k_iterations: int, n_capteurs: int, zones_par_capteur: list[list[int]]) -> list[tuple[int]]:
+    liste_combi = set()
+    for _ in range(k_iterations):
+        config = combinaison_elementaire(n_capteurs, zones_par_capteur)
+        if config:
+            liste_combi.add(config)
+    return list(liste_combi)
 
 
 def solveur(n_capteurs: int, n_zones: int, zones_par_capteur: list[list[int]], duree_de_vie_capteurs: list[int]) -> None:
     # trouver les combinaisons de capteurs qui couvrent toutes les zones
     # donc au moins un capteur doit couvrir chaque zone
-    combinaisons = combinaisons_elementaires(n_capteurs, n_zones, zones_par_capteur)
+    combinaisons = creer_liste_combinaisons(100, n_capteurs, zones_par_capteur)
     print(f"Combinaisons élémentaires: {combinaisons}")
 
 
