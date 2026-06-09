@@ -35,12 +35,10 @@ def generer_configurations_tabou(n_capteurs: int, zones_par_capteur: list[list[i
     tabu_list = [-1] * n_capteurs
 
     for iter_idx in range(iterations):
-        meilleur_score = float('inf')
+        meilleur_delta = float('inf')
         meilleur_capteur = -1
-        meilleur_action = 0 # 0: ajouter, 1: retirer
+        meilleur_action = 0
         
-        taille_acteurs = len(acteurs)
-
         for capteur in range(n_capteurs):
             if tabu_list[capteur] > iter_idx:
                 continue
@@ -48,26 +46,16 @@ def generer_configurations_tabou(n_capteurs: int, zones_par_capteur: list[list[i
             z_capteur = zones_idx[capteur]
             
             if capteur in acteurs:
-                taille_voisin = taille_acteurs - 1
-                zones_perdues = 0
-                for z in z_capteur:
-                    if zone_counts[z] == 1:
-                        zones_perdues += 1
-                couverture_voisin = current_coverage - zones_perdues
+                zones_perdues = sum(zone_counts[z] == 1 for z in z_capteur)
+                delta = -1 + alpha * zones_perdues
                 action = 1
             else:
-                taille_voisin = taille_acteurs + 1
-                zones_gagnees = 0
-                for z in z_capteur:
-                    if zone_counts[z] == 0:
-                        zones_gagnees += 1
-                couverture_voisin = current_coverage + zones_gagnees
+                zones_gagnees = sum(zone_counts[z] == 0 for z in z_capteur)
+                delta = 1 - alpha * zones_gagnees
                 action = 0
 
-            score = taille_voisin + alpha * (n_cibles - couverture_voisin)
-
-            if score < meilleur_score:
-                meilleur_score = score
+            if delta < meilleur_delta:
+                meilleur_delta = delta
                 meilleur_capteur = capteur
                 meilleur_action = action
 
@@ -95,22 +83,16 @@ def generer_configurations_tabou(n_capteurs: int, zones_par_capteur: list[list[i
             if frozen not in visited_full:
                 visited_full.add(frozen)
                 
-                comptes_locaux = zone_counts.copy()
+                comptes_locaux = list(zone_counts)
                 combi_pure = set(acteurs)
                 
                 for c in list(combi_pure):
-                    redundant = True
-                    for z in zones_idx[c]:
-                        if comptes_locaux[z] <= 1:
-                            redundant = False
-                            break
-                            
-                    if redundant:
+                    if not any(comptes_locaux[z] <= 1 for z in zones_idx[c]):
                         combi_pure.remove(c)
                         for z in zones_idx[c]:
                             comptes_locaux[z] -= 1
                             
-                solutions.add(tuple(sorted([c + 1 for c in combi_pure])))
+                solutions.add(tuple(sorted(c + 1 for c in combi_pure)))
 
     return list(solutions)
 
