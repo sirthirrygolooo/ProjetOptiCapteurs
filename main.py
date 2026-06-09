@@ -3,7 +3,7 @@ import random
 from verif import verifier_configurations
 from solv import resoudre_ordonnancement, afficher_solution
 from time import perf_counter
-
+from concurrent.futures import ProcessPoolExecutor
 
 import random
 
@@ -99,8 +99,10 @@ def generer_configurations_tabou(n_capteurs: int, zones_par_capteur: list[list[i
 
 def collecter_grand_pool(n_capteurs: int, zones_par_capteur: list[list[int]], n_restarts: int = 10) -> list[tuple[int]]:
     pool_global = set()
-    for _ in range(n_restarts):
-        pool_global.update(generer_configurations_tabou(n_capteurs, zones_par_capteur, iterations=300))
+    with ProcessPoolExecutor() as executor:
+        futures = [executor.submit(generer_configurations_tabou, n_capteurs, zones_par_capteur, 300) for _ in range(n_restarts)]
+        for f in futures:
+            pool_global.update(f.result())
     return list(pool_global)
 
 
@@ -108,7 +110,7 @@ def solveur(n_capteurs: int, n_zones: int, zones_par_capteur: list[list[int]], d
     # trouver les combinaisons de capteurs qui couvrent toutes les zones
     # donc au moins un capteur doit couvrir chaque zone
     t1 = perf_counter()
-    combinaisons = collecter_grand_pool(n_capteurs, zones_par_capteur)
+    combinaisons = collecter_grand_pool(n_capteurs, zones_par_capteur, 50)
     duree_totale, resultats_configurations = resoudre_ordonnancement(n_capteurs, duree_de_vie_capteurs, combinaisons)
     print(f"\nTemps d'exécution : {perf_counter() - t1:.2f} secondes.")
     afficher_solution(duree_totale, resultats_configurations)
