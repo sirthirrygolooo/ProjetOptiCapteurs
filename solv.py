@@ -16,7 +16,7 @@ def resoudre_ordonnancement(n_capteurs: int, duree_de_vie_capteurs: list[int], c
         prob += pulp.lpSum([
             temps_activation[c] 
             for c, config in enumerate(configurations) 
-            if capteur in config
+            if (capteur+1) in config
         ]) <= duree_de_vie_capteurs[capteur]
 
     prob.solve(pulp.GLPK_CMD(msg=False))

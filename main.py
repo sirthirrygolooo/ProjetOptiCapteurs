@@ -110,7 +110,7 @@ def solveur(n_capteurs: int, n_zones: int, zones_par_capteur: list[list[int]], d
     # trouver les combinaisons de capteurs qui couvrent toutes les zones
     # donc au moins un capteur doit couvrir chaque zone
     t1 = perf_counter()
-    combinaisons = collecter_grand_pool(n_capteurs, zones_par_capteur, 50)
+    combinaisons = collecter_grand_pool(n_capteurs, zones_par_capteur, 100)
     duree_totale, resultats_configurations = resoudre_ordonnancement(n_capteurs, duree_de_vie_capteurs, combinaisons)
     print(f"\nTemps d'exécution : {perf_counter() - t1:.2f} secondes.")
     afficher_solution(duree_totale, resultats_configurations)
