@@ -1,65 +1,137 @@
 import sys
 import random
+from verif import verifier_configurations
+from solv import resoudre_ordonnancement, afficher_solution
+from time import perf_counter
 
 
-def combinaison_elementaire(n_capteurs: int, zones_par_capteur: list[list[int]]) -> tuple[int]:
-    cibles = {z for zones in zones_par_capteur for z in zones}
+import random
+
+def generer_configurations_tabou(n_capteurs: int, zones_par_capteur: list[list[int]], iterations: int = 400, tenure: int = 15) -> list[tuple[int]]:
+    cibles_uniques = {z for zones in zones_par_capteur for z in zones}
+    n_cibles = len(cibles_uniques)
     
-    # ==========================================
-    # Algorithme Glouton Aléatoire
-    # ==========================================
-    zones_non_couvertes = set(cibles)
-    config_valide = []
-    capteurs_dispos = list(range(n_capteurs))
+    # alpha = punition. Très élevé pour forcer la couverture complète, mais pas trop pour ne pas négliger la taille de la solution.
+    alpha = n_capteurs + 1
     
-    while zones_non_couvertes:
-        apports = []
-        for c in capteurs_dispos:
-            couverture = set(zones_par_capteur[c]) & zones_non_couvertes
-            apports.append((len(couverture), c))
+    zone_to_idx = {z: i for i, z in enumerate(cibles_uniques)}
+    zones_idx = [[zone_to_idx[z] for z in zones] for zones in zones_par_capteur]
+    
+    solutions = set()
+    visited_full = set() 
+    
+    acteurs = set()
+    zone_counts = [0] * n_cibles
+    current_coverage = 0
+    
+    for i in range(n_capteurs):
+        if random.random() < 0.3:
+            acteurs.add(i)
+            for z in zones_idx[i]:
+                if zone_counts[z] == 0:
+                    current_coverage += 1
+                zone_counts[z] += 1
+
+    tabu_list = [-1] * n_capteurs
+
+    for iter_idx in range(iterations):
+        meilleur_score = float('inf')
+        meilleur_capteur = -1
+        meilleur_action = 0 # 0: ajouter, 1: retirer
         
-        max_couverture = max(apport[0] for apport in apports)
-        
-        if max_couverture == 0:
+        taille_acteurs = len(acteurs)
+
+        for capteur in range(n_capteurs):
+            if tabu_list[capteur] > iter_idx:
+                continue
+
+            z_capteur = zones_idx[capteur]
+            
+            if capteur in acteurs:
+                taille_voisin = taille_acteurs - 1
+                zones_perdues = 0
+                for z in z_capteur:
+                    if zone_counts[z] == 1:
+                        zones_perdues += 1
+                couverture_voisin = current_coverage - zones_perdues
+                action = 1
+            else:
+                taille_voisin = taille_acteurs + 1
+                zones_gagnees = 0
+                for z in z_capteur:
+                    if zone_counts[z] == 0:
+                        zones_gagnees += 1
+                couverture_voisin = current_coverage + zones_gagnees
+                action = 0
+
+            score = taille_voisin + alpha * (n_cibles - couverture_voisin)
+
+            if score < meilleur_score:
+                meilleur_score = score
+                meilleur_capteur = capteur
+                meilleur_action = action
+
+        if meilleur_capteur == -1:
             break
-            
-        meilleurs_candidats = [c for apport, c in apports if apport == max_couverture]
-        
-        choix = random.choice(meilleurs_candidats)
-        
-        config_valide.append(choix)
-        capteurs_dispos.remove(choix)
-        zones_non_couvertes -= set(zones_par_capteur[choix])
 
-    # ==========================================
-    # La Purge
-    # ==========================================
-    config_elementaire = config_valide.copy()
-    
-    for capteur in reversed(config_valide):
-        config_test = [c for c in config_elementaire if c != capteur]
-        zones_couvertes_test = {z for c in config_test for z in zones_par_capteur[c]}
-        
-        if cibles.issubset(zones_couvertes_test):
-            config_elementaire.remove(capteur)
-            
-    return tuple(sorted([c + 1 for c in config_elementaire]))
+        z_meilleur = zones_idx[meilleur_capteur]
+        if meilleur_action == 1:
+            acteurs.remove(meilleur_capteur)
+            for z in z_meilleur:
+                if zone_counts[z] == 1:
+                    current_coverage -= 1
+                zone_counts[z] -= 1
+        else:
+            acteurs.add(meilleur_capteur)
+            for z in z_meilleur:
+                if zone_counts[z] == 0:
+                    current_coverage += 1
+                zone_counts[z] += 1
+
+        tabu_list[meilleur_capteur] = iter_idx + tenure
+
+        if current_coverage == n_cibles:
+            frozen = frozenset(acteurs)
+            if frozen not in visited_full:
+                visited_full.add(frozen)
+                
+                comptes_locaux = zone_counts.copy()
+                combi_pure = set(acteurs)
+                
+                for c in list(combi_pure):
+                    redundant = True
+                    for z in zones_idx[c]:
+                        if comptes_locaux[z] <= 1:
+                            redundant = False
+                            break
+                            
+                    if redundant:
+                        combi_pure.remove(c)
+                        for z in zones_idx[c]:
+                            comptes_locaux[z] -= 1
+                            
+                solutions.add(tuple(sorted([c + 1 for c in combi_pure])))
+
+    return list(solutions)
 
 
-def creer_liste_combinaisons(k_iterations: int, n_capteurs: int, zones_par_capteur: list[list[int]]) -> list[tuple[int]]:
-    liste_combi = set()
-    for _ in range(k_iterations):
-        config = combinaison_elementaire(n_capteurs, zones_par_capteur)
-        if config:
-            liste_combi.add(config)
-    return list(liste_combi)
+def collecter_grand_pool(n_capteurs: int, zones_par_capteur: list[list[int]], n_restarts: int = 10) -> list[tuple[int]]:
+    pool_global = set()
+    for _ in range(n_restarts):
+        pool_global.update(generer_configurations_tabou(n_capteurs, zones_par_capteur, iterations=300))
+    return list(pool_global)
 
 
 def solveur(n_capteurs: int, n_zones: int, zones_par_capteur: list[list[int]], duree_de_vie_capteurs: list[int]) -> None:
     # trouver les combinaisons de capteurs qui couvrent toutes les zones
     # donc au moins un capteur doit couvrir chaque zone
-    combinaisons = creer_liste_combinaisons(100, n_capteurs, zones_par_capteur)
-    print(f"Combinaisons élémentaires: {combinaisons}")
+    t1 = perf_counter()
+    combinaisons = collecter_grand_pool(n_capteurs, zones_par_capteur)
+    duree_totale, resultats_configurations = resoudre_ordonnancement(n_capteurs, duree_de_vie_capteurs, combinaisons)
+    print(f"\nTemps d'exécution : {perf_counter() - t1:.2f} secondes.")
+    afficher_solution(duree_totale, resultats_configurations)
+    # verifier_configurations(zones_par_capteur, combinaisons)
+
 
 
 def main() -> int:
@@ -82,14 +154,6 @@ def main() -> int:
         for i in range(3,3 + n_capteurs):
             zones = list(map(int, data[i].split()))
             zones_par_capteur.append(zones)
-        
-        
-        print(f"Nombre de capteurs: {n_capteurs}")
-        print(f"Nombre de zones: {n_zones}")
-        print("Zones surveillées par chaque capteur:")
-        for i, zones in enumerate(zones_par_capteur):
-            print(f"Capteur {i+1}: {zones}")
-        print(f"Durée de vie des capteurs: {duree_de_vie_capteurs}")
 
         solveur(n_capteurs, n_zones, zones_par_capteur, duree_de_vie_capteurs)
     return 0
